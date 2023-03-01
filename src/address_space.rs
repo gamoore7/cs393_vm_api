@@ -99,7 +99,27 @@ impl AddressSpace {
         start: VirtualAddress,
         flags: FlagBuilder
     ) -> Result<(), &str> {
-        todo!()
+        //Add check later
+        let mut addr_iter = PAGE_SIZE; // let's not map page 0
+        let gap;
+        for mapping in &self.mappings {
+            if mapping.addr > start {
+                gap = mapping.addr - addr_iter;
+                if gap > span + 2 * PAGE_SIZE {
+                    break;
+                }
+                return Err("insufficient gap size")
+            }
+            addr_iter = mapping.addr + mapping.span;
+        }
+        if start + span + 2 * PAGE_SIZE < VADDR_MAX {
+            let mapping_addr = start + PAGE_SIZE;
+            let new_mapping = MapEntry::new(source, offset, span, mapping_addr, flags);
+            self.mappings.push(new_mapping);
+            self.mappings.sort_by(|a, b| a.addr.cmp(&b.addr));
+            return Ok(());
+        }
+        Err("out of address space!")
     }
 
     /// Remove the mapping to `DataSource` that starts at the given address.
@@ -107,11 +127,23 @@ impl AddressSpace {
     /// # Errors
     /// If the mapping could not be removed.
     pub fn remove_mapping<D: DataSource>(
-        &self,
+        &mut self,
         source: Arc<D>,
         start: VirtualAddress,
     ) -> Result<(), &str> {
-        todo!()
+        let mut number = 0;
+        for mapping in &self.mappings {
+            if mapping.addr == start {
+                self.mappings.remove(number);
+                return Ok(());
+            }
+            number = number + 1;
+        }
+        // if let index = self.mappings.iter().position(|x| x.addr == start).unwrap() {
+        //     self.mappings.remove(index);
+        //     return Ok(());
+        // }
+        Err("mapping could not be removed")
     }
 
     /// Look up the DataSource and offset within that DataSource for a
@@ -124,13 +156,22 @@ impl AddressSpace {
         &self,
         addr: VirtualAddress,
         access_type: FlagBuilder,
-    ) -> Result<(Arc<D>, usize), &str> {
-        todo!();
+    ) -> Result<(Arc<dyn DataSource>, usize), &str> {
+        if let Ok(mapping1) = self.get_mapping_for_addr(addr) {
+            let tup = (mapping1.source.clone(),mapping1.offset);
+            return Ok(tup);
+        }
+        Err("no valid mapping or AccessType not permitted")
     }
 
     /// Helper function for looking up mappings
-    fn get_mapping_for_addr(&self, addr: VirtualAddress) -> Result<MapEntry, &str> {
-        todo!();
+    fn get_mapping_for_addr(&self, addr: VirtualAddress) -> Result<&MapEntry, &str> {
+        for mapping in &self.mappings {
+            if mapping.addr == addr {
+                return Ok(mapping);
+            }
+        }
+        Err("mapping does not exist")
     }
 }
 
